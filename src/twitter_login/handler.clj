@@ -35,10 +35,13 @@
         request-token (:request-token session)
         verifier (:oauth_verifier params)]
     (. twitter (getOAuthAccessToken request-token verifier))
-    (assoc
-        (redirect "/")
-      :session {:name (. twitter (getScreenName))}
-      )
+    (let [user (. twitter (showUser (. twitter (getId))))]
+      (assoc
+          (redirect "/")
+        :session {:name (. user (getScreenName))
+                  :id (. user (getId))
+                  :display-name (. user (getName))}
+        ))
     ))
 
 (defn logout [redirect-url]
@@ -47,11 +50,11 @@
    :cookies {"ring-session" {:value "" :max-age 0}}
    ))
 
-(defn home [{name :name} login-url]
-  (if (nil? name)
+(defn home [session login-url]
+  (if (nil? (:display-name session))
     (redirect login-url)
     (content-type (response (html
-                             [:h2 (format "Hello %s" name)]
+                             [:h2 (format "Hello %s" (:display-name session))]
                              [:form {:method "post" :action "/logout"}
                               [:input {:type "submit" :value "logout"}]
                               ]
