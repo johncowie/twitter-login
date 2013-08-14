@@ -1,22 +1,18 @@
 (ns twitter-login.handler
   (:require
-   [compojure.core :refer [defroutes GET POST]]
+   [compojure.core :refer [defroutes GET POST DELETE]]
    [compojure.handler :as handler]
    [compojure.route :as route]
    [ring.middleware.session :as session]
    [ring.util.response :refer [response redirect content-type]]
-   [hiccup.core :refer [html]]
+   [twitter-login.views :as views]
+   [twitter-login.dao :as dao]
    )
   (:import [twitter4j Twitter TwitterFactory]
            [twitter4j.conf PropertyConfiguration]))
 
-(defn login-page []
-  (content-type (response (html
-                           [:form {:method "post"}
-                            [:input {:type "submit" :value "login"}]
-                            ]
-                           ))  "text/html"
-                ))
+(defn html-response [html]
+  (content-type (response html) "text/html"))
 
 (def twitter-config
   (PropertyConfiguration. (clojure.java.io/input-stream "/Users/John/Dropbox/nuotltester.properties")))
@@ -38,11 +34,7 @@
     (let [user (. twitter (showUser (. twitter (getId))))]
       (assoc
           (redirect "/")
-        :session {:name (. user (getScreenName))
-                  :id (. user (getId))
-                  :display-name (. user (getName))}
-        ))
-    ))
+        :session {:user {:handle (. user (getScreenName)) :name (. user (getName)) :id (. user (getId))}}))))
 
 (defn logout [redirect-url]
   (assoc
@@ -50,19 +42,29 @@
    :cookies {"ring-session" {:value "" :max-age 0}}
    ))
 
-(defn home [session login-url]
-  (if (nil? (:display-name session))
-    (redirect login-url)
-    (content-type (response (html
-                             [:h2 (format "Hello %s" (:display-name session))]
-                             [:form {:method "post" :action "/logout"}
-                              [:input {:type "submit" :value "logout"}]
-                              ]
-                             )) "text/html")))
+(defn auth [session response]
+  (if (nil? (:user session))
+    (redirect "/login")
+    response))
+
+(defn post-event [{user :user} {text :text}]
+  (dao/add-event {:text text} (user :id))
+  (redirect "/")
+  )
+
+(defn get-dashboard [{user :user}]
+  (html-response (views/dashboard user (dao/get-things (:id user)))))
 
 (defroutes app-routes
-  (GET "/" {session :session} (home session "/login"))
-  (GET "/login" [] (login-page))
+  (GET "/" {session :session} (auth session (get-dashboard session) ))
+  (POST "/" {session :session params :params}
+        (auth session (post-event session params)))
+  (POST "/delete" {session :session params :params}
+        (do
+          (dao/delete-thing (:thing_id params))
+            (redirect "/")
+            ))
+  (GET "/login" [] (html-response (views/login)))
   (POST "/login" {params :params} (login "/"))
   (POST "/logout" []  (logout "/"))
   (GET "/callback" {session :session params :params} (callback session params))
