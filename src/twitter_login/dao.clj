@@ -11,9 +11,9 @@
 (defn add-event [thing id]
   (coll/save "event" (merge thing {:user id})))
 
-(defn delete-thing [id]
+(defn delete-event [id]
   (println "Deleting thing " id)
   (coll/remove-by-id "event" (org.bson.types.ObjectId. id)))
 
-(defn get-things [id]
+(defn get-events-for-user [id]
   (coll/find-maps "event" {:user id}))

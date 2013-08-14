@@ -11,6 +11,8 @@
   (:import [twitter4j Twitter TwitterFactory]
            [twitter4j.conf PropertyConfiguration]))
 
+(def auth-on false)
+
 (defn html-response [html]
   (content-type (response html) "text/html"))
 
@@ -24,7 +26,8 @@
     (assoc
         (redirect (. request-token (getAuthenticationURL)))
       :session {:twitter twitter :request-token request-token}
-      )))
+      ))
+    )
 
 (defn callback [session params]
   (let [twitter (:twitter session)
@@ -43,27 +46,31 @@
    ))
 
 (defn auth [session response]
-  (if (nil? (:user session))
-    (redirect "/login")
-    response))
+  (if auth-on
+    (if (nil? (:user session))
+      (redirect "/login")
+      response)
+    (assoc response :session {:user {:handle "testhandle" :name "Test Name" :id 1}})
+    ))
 
-(defn post-event [{user :user} {text :text}]
-  (dao/add-event {:text text} (user :id))
-  (redirect "/")
-  )
+(defn post-event [{user :user} params]
+  (dao/add-event params (user :id))
+  (redirect "/"))
+
+(defn delete-event [{id :thing_id}]
+  (dao/delete-event id)
+  (redirect "/"))
+
+
 
 (defn get-dashboard [{user :user}]
-  (html-response (views/dashboard user (dao/get-things (:id user)))))
+  (html-response (views/dashboard user (dao/get-events-for-user (:id user)))))
 
 (defroutes app-routes
   (GET "/" {session :session} (auth session (get-dashboard session) ))
   (POST "/" {session :session params :params}
         (auth session (post-event session params)))
-  (POST "/delete" {session :session params :params}
-        (do
-          (dao/delete-thing (:thing_id params))
-            (redirect "/")
-            ))
+  (POST "/delete" {session :session params :params} (delete-event params))
   (GET "/login" [] (html-response (views/login)))
   (POST "/login" {params :params} (login "/"))
   (POST "/logout" []  (logout "/"))
